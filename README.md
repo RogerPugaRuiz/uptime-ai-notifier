@@ -112,45 +112,42 @@ Este proyecto incluye un workflow de GitHub Actions que monitorea el uptime de t
 ### Configuración del Monitor de Uptime
 
 1. **Configura n8n para recibir webhooks:**
-   
+
    a. Accede a tu instancia de n8n (http://localhost:5678)
-   
+
    b. Crea un nuevo workflow con un nodo "Webhook"
-   
+
    c. Configura el webhook con el método POST
-   
+
    d. Copia la URL del webhook (ej: `http://tu-dominio.com:5678/webhook/uptime-alert`)
 
-2. **Agrega el webhook como secret en GitHub:**
-   
+2. **Agrega los secrets en GitHub:**
+
    a. Ve a tu repositorio en GitHub
-   
+
    b. Settings → Secrets and variables → Actions
-   
+
    c. Click en "New repository secret"
-   
-   d. Nombre: `WEBHOOK_URL`
-   
-   e. Valor: La URL del webhook de n8n
-   
-   f. Click en "Add secret"
 
-3. **Configura el sitio a monitorear:**
-   
-   Edita el archivo `.github/workflows/uptime-monitor.yml` y cambia la línea:
-   ```yaml
-   TARGET="https://google.com" # CAMBIA ESTO POR TU WEB REAL
-   ```
-   Por tu sitio web real.
+   **Secret 1: WEBHOOK_URL** (requerido)
+   - Nombre: `WEBHOOK_URL`
+   - Valor: La URL del webhook de n8n
+   - Click en "Add secret"
 
-4. **Prueba el workflow manualmente:**
-   
+   **Secret 2: TARGET_URL** (opcional)
+   - Nombre: `TARGET_URL`
+   - Valor: La URL del sitio que quieres monitorear (ej: `https://tu-sitio.com`)
+   - Click en "Add secret"
+   - Si no lo configuras, usa `https://google.com` por defecto
+
+3. **Prueba el workflow manualmente:**
+
    a. Ve a la pestaña "Actions" en tu repositorio
-   
+
    b. Selecciona "Monitor de Uptime"
-   
+
    c. Click en "Run workflow"
-   
+
    d. Click en "Run workflow" nuevamente
 
 ### Funcionamiento del Monitor
@@ -158,10 +155,13 @@ Este proyecto incluye un workflow de GitHub Actions que monitorea el uptime de t
 - **Ejecución automática**: Cada 15 minutos (configurable en el cron)
 - **Ejecución manual**: Disponible con un botón en la pestaña Actions
 - **Detección de errores**: Verifica que el sitio responda con código HTTP 200
+- **Reintentos automáticos**: 3 intentos con 2 segundos de espera entre cada uno
+- **Timeout**: 30 segundos máximo por petición
 - **Alertas**: Si el sitio no responde correctamente, envía un JSON a n8n con:
   - `site`: URL del sitio monitoreado
   - `error_code`: Código HTTP recibido
   - `event`: "site_down"
+- **Manejo de errores**: Notifica si el webhook de n8n no está disponible
 
 ### Ejemplo de Workflow en n8n
 

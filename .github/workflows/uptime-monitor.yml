@@ -8,6 +8,10 @@ on:
   # Esto te permite ejecutarlo manualmente con un botón para probar ya mismo
   workflow_dispatch:
 
+env:
+  # Configura tu sitio web aquí o usa un secret TARGET_URL
+  TARGET: ${{ secrets.TARGET_URL || 'https://google.com' }}
+
 jobs:
   check-status:
     runs-on: ubuntu-latest
@@ -15,14 +19,15 @@ jobs:
       - name: Verificar estado del sitio
         id: check
         run: |
-          # --- CONFIGURACIÓN ---
-          TARGET="https://google.com" # CAMBIA ESTO POR TU WEB REAL
-          # ---------------------
-
           echo "Comprobando $TARGET..."
 
           # Hacemos la petición y guardamos el código HTTP (200, 404, 500, etc)
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET")
+          # Con timeout de 30s y 3 reintentos para mayor robustez
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 30 \
+            --retry 3 \
+            --retry-delay 2 \
+            "$TARGET")
 
           echo "Código recibido: $HTTP_CODE"
 
@@ -31,9 +36,18 @@ jobs:
             echo "¡Sitio caído! Enviando alerta a n8n..."
 
             # Enviamos el JSON con la estructura que tu n8n espera
-            curl -X POST -H "Content-Type: application/json" \
+            # Con timeout y manejo de errores
+            if curl -X POST -H "Content-Type: application/json" \
               -d "{\"site\": \"$TARGET\", \"error_code\": \"$HTTP_CODE\", \"event\": \"site_down\"}" \
-              ${{ secrets.WEBHOOK_URL }}
+              --max-time 30 \
+              --fail \
+              --silent \
+              --show-error \
+              ${{ secrets.WEBHOOK_URL }}; then
+              echo "Alerta enviada exitosamente a n8n"
+            else
+              echo "Error al enviar alerta a n8n (webhook podría estar inaccesible)"
+            fi
 
             # Hacemos fallar el action para que salga rojo en GitHub
             exit 1
