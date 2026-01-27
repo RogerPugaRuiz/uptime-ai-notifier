@@ -8,9 +8,9 @@ services:
     environment:
       - N8N_HOST=${N8N_HOST:-localhost}
       - N8N_PORT=5678
-      - N8N_PROTOCOL=${N8N_PROTOCOL:-https}
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
       - NODE_ENV=production
-      - WEBHOOK_URL=${WEBHOOK_URL:-https://localhost:5678/}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
       - GENERIC_TIMEZONE=${TIMEZONE:-UTC}
       - N8N_LOG_LEVEL=info
       - N8N_LOG_OUTPUT=file
@@ -25,7 +25,7 @@ services:
     networks:
       - uptime-ai-prod
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/"]
       interval: 30s
       timeout: 10s
       retries: 3

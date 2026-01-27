@@ -42,13 +42,15 @@ WEBHOOK_URL=https://tu-dominio.com:5678/
 TIMEZONE=America/Mexico_City
 ```
 
+**Nota:** Para usar HTTPS en producción, necesitas configurar un reverse proxy (como Nginx o Traefik) con certificados SSL. Por defecto, el archivo usa HTTP para localhost.
+
 3. Ejecuta n8n en modo producción:
 
 ```bash
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-Accede a n8n en: https://tu-dominio.com:5678
+Accede a n8n en: http://tu-dominio.com:5678 (o https si configuraste SSL)
 
 Para detener el servicio:
 
@@ -75,8 +77,8 @@ uptime-ai-notifier/
 | Variable | Descripción | Por Defecto |
 |----------|-------------|-------------|
 | `N8N_HOST` | Host donde n8n es accesible | `localhost` |
-| `N8N_PROTOCOL` | Protocolo (http o https) | `https` |
-| `WEBHOOK_URL` | URL de webhooks para n8n | `https://localhost:5678/` |
+| `N8N_PROTOCOL` | Protocolo (http o https) | `http` |
+| `WEBHOOK_URL` | URL de webhooks para n8n | `http://localhost:5678/` |
 | `TIMEZONE` | Zona horaria | `UTC` |
 
 ### Diferencias entre Test y Prod
