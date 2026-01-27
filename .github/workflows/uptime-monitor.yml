@@ -1,0 +1,42 @@
+name: Monitor de Uptime
+
+on:
+  schedule:
+    # Se ejecuta cada 15 minutos para no gastar los minutos gratis muy rápido
+    # Si quieres cada 5 min, cambia a: '*/5 * * * *'
+    - cron: '*/15 * * * *'
+  # Esto te permite ejecutarlo manualmente con un botón para probar ya mismo
+  workflow_dispatch:
+
+jobs:
+  check-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar estado del sitio
+        id: check
+        run: |
+          # --- CONFIGURACIÓN ---
+          TARGET="https://google.com" # CAMBIA ESTO POR TU WEB REAL
+          # ---------------------
+
+          echo "Comprobando $TARGET..."
+
+          # Hacemos la petición y guardamos el código HTTP (200, 404, 500, etc)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET")
+
+          echo "Código recibido: $HTTP_CODE"
+
+          # Si el código NO es 200 (OK), enviamos alerta a n8n
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "¡Sitio caído! Enviando alerta a n8n..."
+
+            # Enviamos el JSON con la estructura que tu n8n espera
+            curl -X POST -H "Content-Type: application/json" \
+              -d "{\"site\": \"$TARGET\", \"error_code\": \"$HTTP_CODE\", \"event\": \"site_down\"}" \
+              ${{ secrets.WEBHOOK_URL }}
+
+            # Hacemos fallar el action para que salga rojo en GitHub
+            exit 1
+          else
+            echo "El sitio está online. Todo correcto."
+          fi

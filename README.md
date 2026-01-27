@@ -62,6 +62,9 @@ docker-compose -f docker-compose.prod.yml down
 
 ```
 uptime-ai-notifier/
+├── .github/
+│   └── workflows/
+│       └── uptime-monitor.yml  # GitHub Action para monitoreo
 ├── docker-compose.test.yml    # Configuración para entorno de prueba
 ├── docker-compose.prod.yml    # Configuración para entorno de producción
 ├── .env.example               # Ejemplo de variables de entorno
@@ -101,6 +104,78 @@ uptime-ai-notifier/
 ## 📊 Workflows
 
 Los workflows de n8n se pueden almacenar en el directorio `workflows/` para versionarlos. Los archivos en este directorio estarán disponibles en n8n cuando se ejecute.
+
+## 🤖 Integración con GitHub Actions
+
+Este proyecto incluye un workflow de GitHub Actions que monitorea el uptime de tu sitio web y envía alertas a n8n cuando detecta problemas.
+
+### Configuración del Monitor de Uptime
+
+1. **Configura n8n para recibir webhooks:**
+   
+   a. Accede a tu instancia de n8n (http://localhost:5678)
+   
+   b. Crea un nuevo workflow con un nodo "Webhook"
+   
+   c. Configura el webhook con el método POST
+   
+   d. Copia la URL del webhook (ej: `http://tu-dominio.com:5678/webhook/uptime-alert`)
+
+2. **Agrega el webhook como secret en GitHub:**
+   
+   a. Ve a tu repositorio en GitHub
+   
+   b. Settings → Secrets and variables → Actions
+   
+   c. Click en "New repository secret"
+   
+   d. Nombre: `WEBHOOK_URL`
+   
+   e. Valor: La URL del webhook de n8n
+   
+   f. Click en "Add secret"
+
+3. **Configura el sitio a monitorear:**
+   
+   Edita el archivo `.github/workflows/uptime-monitor.yml` y cambia la línea:
+   ```yaml
+   TARGET="https://google.com" # CAMBIA ESTO POR TU WEB REAL
+   ```
+   Por tu sitio web real.
+
+4. **Prueba el workflow manualmente:**
+   
+   a. Ve a la pestaña "Actions" en tu repositorio
+   
+   b. Selecciona "Monitor de Uptime"
+   
+   c. Click en "Run workflow"
+   
+   d. Click en "Run workflow" nuevamente
+
+### Funcionamiento del Monitor
+
+- **Ejecución automática**: Cada 15 minutos (configurable en el cron)
+- **Ejecución manual**: Disponible con un botón en la pestaña Actions
+- **Detección de errores**: Verifica que el sitio responda con código HTTP 200
+- **Alertas**: Si el sitio no responde correctamente, envía un JSON a n8n con:
+  - `site`: URL del sitio monitoreado
+  - `error_code`: Código HTTP recibido
+  - `event`: "site_down"
+
+### Ejemplo de Workflow en n8n
+
+Puedes crear un workflow en n8n que:
+1. Reciba el webhook cuando el sitio esté caído
+2. Procese la información del error
+3. Envíe notificaciones por:
+   - Email
+   - Slack
+   - Discord
+   - Telegram
+   - SMS
+4. Use IA para analizar patrones de fallos
+5. Genere reportes automáticos
 
 ## 🔄 Comandos Útiles
 
