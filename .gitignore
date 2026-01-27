@@ -1,0 +1,12 @@
+# Environment files
+.env
+
+# Docker volumes
+n8n_test_data/
+n8n_prod_data/
+
+# Logs
+logs/
+
+# Workflows (optional - comment if you want to track workflows)
+# workflows/
