@@ -4,7 +4,7 @@ on:
   schedule:
     # Se ejecuta cada 15 minutos para no gastar los minutos gratis muy rápido
     # Si quieres cada 5 min, cambia a: '*/5 * * * *'
-    - cron: '*/15 * * * *'
+    - cron: '*/5 * * * *'
   # Esto te permite ejecutarlo manualmente con un botón para probar ya mismo
   workflow_dispatch:
 
