@@ -1,0 +1,264 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "monitor-alert",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "0a2acd5e-a030-4590-9b4b-a9ddcfab0335",
+      "name": "Webhook",
+      "webhookId": "33672ff0-e214-4d9f-87e7-bbdf7b76cca2"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.0-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Eres un motor de notificaciones backend.\nTu ÚNICA función es convertir datos JSON en un mensaje de texto plano para WhatsApp.\nREGLAS SAGRADAS:\n1. NO saludes, NO expliques, NO uses introducciones como \"Aquí está el mensaje\".\n2. Tu salida debe empezar directamente con el primer emoji del mensaje.\n3. Si hablas más de la cuenta, el sistema fallará.",
+              "role": "model"
+            },
+            {
+              "content": "=Genera la alerta con estos datos:\nServidor: {{ $json.body.site }}\nError: {{ $json.body.error_code }}\nHora: {{ $now.format('HH:mm - dd/MM/yyyy') }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        224
+      ],
+      "id": "80a5bdfd-664b-403e-b85e-0676742737d7",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "JL5ZMWTfOrE0BeTN",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. OBTENER ESTADO NUEVO\nconst webhookData = $('Webhook').first().json.body;\nconst newStatus = String(webhookData.error_code).trim();\nconst site = webhookData.site;\nconst timestamp = webhookData.check_time;\n\n// 2. OBTENER ESTADO ANTERIOR\nlet oldStatus = 'Primer chequeo';\n\n// Accedemos al input binario\nconst binaryData = $input.first().binary;\n\nif (binaryData && binaryData.data) {\n  try {\n    // Intentamos obtener el contenido directamente. \n    // En n8n, el método más seguro es usar el helper del objeto binario\n    // o el Buffer si ya habilitaste la variable de entorno.\n    \n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    oldStatus = buffer.toString('utf8').trim();\n    \n  } catch (error) {\n    // Si falla el helper, probamos el método directo del objeto\n    try {\n        oldStatus = Buffer.from(binaryData.data.data, 'base64').toString('utf8').trim();\n    } catch (e) {\n        oldStatus = 'Primer chequeo';\n    }\n  }\n}\n\n// 3. LÓGICA DE COMPARACIÓN\nconst hasChanged = (newStatus !== oldStatus);\nconst isUp = (newStatus === '200' || newStatus === '302');\n\n// Formatear mensaje visual\nlet displayStatus = newStatus;\nif (newStatus === '000') displayStatus = '000 (Sin Conexión)';\n\nreturn {\n  json: {\n    alert: hasChanged,\n    site: site,\n    new_status: displayStatus,\n    old_status: oldStatus,\n    type: isUp ? 'recovered' : 'down',\n    check_time: timestamp,\n    file_content: newStatus \n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        0
+      ],
+      "id": "2887f53d-255f-4a64-b80f-6bbbb98ba7e9",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "chatId": "794033826",
+        "text": "={{ $json.type == 'recovered' ? '🟢 ¡SERVICIO RECUPERADO!' : '🚨 ¡ALERTA: SITIO CAÍDO!' }}  🌐 **Sitio:** {{ $json.site }} 📊 **Estado:** {{ $json.new_status }} history **Anterior:** {{ $json.old_status }}  📅 **Hora:** {{ $json.timestamp }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        896,
+        -32
+      ],
+      "id": "c3a46b7a-5590-4132-9adf-1523b42b2eea",
+      "name": "Send a text message",
+      "webhookId": "9bfc3a12-c9c9-41cb-9097-c43955bfe556",
+      "credentials": {
+        "telegramApi": {
+          "id": "tRTuS5eoxHHnazhE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9350a1ce-3382-4a58-b138-ef25d26a51a3",
+              "leftValue": "={{ $json.alert }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        656,
+        0
+      ],
+      "id": "9644a91e-7caf-4ec4-94f0-22e2ecf7acb8",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/home/node/.n8n-files/monitor_status.txt",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "107fac7f-20df-4234-a2d8-1b22d4361806",
+      "name": "Read/Write Files from Disk",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/home/node/.n8n-files/monitor_status.txt",
+        "options": {
+          "append": false
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        208
+      ],
+      "id": "19f04bc7-3410-4d04-a782-121ecb3d2b91",
+      "name": "Read/Write Files from Disk1",
+      "executeOnce": false,
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "new_status",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        608,
+        208
+      ],
+      "id": "8b11b833-0a36-4023-a049-0a81371f50a7",
+      "name": "Convert to File"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        []
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "11c3509b-7d07-4f57-864c-9f29082ea79f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c97c2a5ccd02d26b997ace6bafa1a406a7ec71dee822217d9948705c134b05af"
+  },
+  "id": "AjBDxecKidHHOm2c6NYg9",
+  "tags": []
+}

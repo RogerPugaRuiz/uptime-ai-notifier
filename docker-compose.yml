@@ -1,7 +1,15 @@
 version: '3.8'
 
 services:
-  # --- TU N8N ACTUAL ---
+  # --- SERVICIO REPARADOR DE PERMISOS ---
+  # Se inicia primero, arregla la carpeta y se apaga.
+  fix-permissions:
+    image: alpine:latest
+    container_name: n8n-fix-permissions
+    command: sh -c "chown -R 1000:1000 /home/node/.n8n && echo 'Permisos arreglados'"
+    volumes:
+      - n8n_data:/home/node/.n8n
+
   n8n:
     image: n8nio/n8n:latest
     container_name: uptime-ai-notifier-n8n
@@ -15,17 +23,45 @@ services:
       - N8N_LOG_LEVEL=${LOG_LEVEL:-info}
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=336
-      # Permitir que n8n use el túnel si lo necesitas
-      - N8N_EDITOR_BASE_URL=http://localhost:5678
+      # Forzamos que n8n no intente aplicar migraciones si no es dueño
+      - N8N_SKIP_WEBHOOK_DEREGISTRATION_ON_SHUTDOWN=true
+      # Esta línea es la clave: desactiva el bloqueo estricto
+      - N8N_BLOCK_FS_WRITE_ACCESS=false
+      # Opcionalmente, puedes definir rutas permitidas específicamente (más seguro)
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - NODE_FUNCTION_ALLOW_EXTERNAL=buffer
     volumes:
       - n8n_data:/home/node/.n8n
+      - ./monitor_status.txt:/home/node/.n8n-files/monitor_status.txt
     networks:
       - uptime-ai
+    # Esto le dice a n8n: "No arranques hasta que el reparador termine con éxito"
+    depends_on:
+      fix-permissions:
+        condition: service_completed_successfully
+
+  # --- SERVICIO MONITOR ---
+  monitor:
+    image: alpine:latest
+    container_name: uptime-monitor-script
+    restart: unless-stopped
+    depends_on:
+      - n8n
+    networks:
+      - uptime-ai
+    environment:
+      - TARGET=https://guiders.es/docs
+      - WEBHOOK_URL=http://n8n:5678/webhook/monitor-alert
+    volumes:
+      - ./cron/monitor.sh:/etc/monitor.sh
+    entrypoint: >
+      sh -c "apk add --no-cache curl ca-certificates && 
+             chmod +x /etc/monitor.sh &&
+             echo '* * * * * sh /etc/monitor.sh' > /etc/crontabs/root && 
+             crond -f -l 8"
 
 volumes:
   n8n_data:
-    driver: local
-  evolution_store:
     driver: local
 
 networks:
