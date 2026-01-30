@@ -31,8 +31,8 @@ jobs:
 
           echo "Código recibido: $HTTP_CODE"
 
-          # Si el código NO es 200 (OK), enviamos alerta a n8n
-          if [ "$HTTP_CODE" != "200" ]; then
+          # Aceptamos 200 (OK) y 302 (Redirección) como estados válidos
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "302" ]; then
             echo "¡Sitio caído! Enviando alerta a n8n..."
 
             # Enviamos el JSON con la estructura que tu n8n espera
@@ -47,10 +47,11 @@ jobs:
               echo "Alerta enviada exitosamente a n8n"
             else
               echo "Error al enviar alerta a n8n (webhook podría estar inaccesible)"
+              exit 1
             fi
 
             # Hacemos fallar el action para que salga rojo en GitHub
-            exit 1
+            
           else
             echo "El sitio está online. Todo correcto."
           fi
