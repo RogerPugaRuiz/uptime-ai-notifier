@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # --- TU N8N ACTUAL ---
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: uptime-ai-notifier-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_PORT=5678
+      - GENERIC_TIMEZONE=${TIMEZONE:-Europe/Madrid}
+      - TZ=${TIMEZONE:-Europe/Madrid}
+      - N8N_LOG_LEVEL=${LOG_LEVEL:-info}
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=336
+      # Permitir que n8n use el túnel si lo necesitas
+      - N8N_EDITOR_BASE_URL=http://localhost:5678
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - uptime-ai
+
+volumes:
+  n8n_data:
+    driver: local
+  evolution_store:
+    driver: local
+
+networks:
+  uptime-ai:
+    driver: bridge

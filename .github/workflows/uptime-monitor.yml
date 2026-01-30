@@ -37,7 +37,7 @@ jobs:
 
             # Enviamos el JSON con la estructura que tu n8n espera
             # Con timeout y manejo de errores
-            if curl -X POST -H "Content-Type: application/json" \
+            if curl -L -X POST -H "Content-Type: application/json" \
               -d "{\"site\": \"$TARGET\", \"error_code\": \"$HTTP_CODE\", \"event\": \"site_down\"}" \
               --max-time 30 \
               --fail \
