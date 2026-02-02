@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Web Principal",
+    "url": "https://httpstat.us/200",
+    "interval": 60
+  },
+  {
+    "name": "API Backend",
+    "url": "https://jsonplaceholder.typicode.com/posts/1",
+    "interval": 120
+  },
+  {
+    "name": "GitHub Status",
+    "url": "https://www.githubstatus.com/api/v2/status.json",
+    "interval": 300
+  },
+  {
+    "name": "Servicio Inestable (Demo)",
+    "url": "https://httpstat.us/503",
+    "interval": 180
+  }
+]

@@ -23,6 +23,8 @@ services:
       - N8N_LOG_LEVEL=${LOG_LEVEL:-info}
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=336
+      # Cola única: procesa webhooks de forma secuencial para evitar race conditions
+      - EXECUTIONS_CONCURRENCY=1
       # Forzamos que n8n no intente aplicar migraciones si no es dueño
       - N8N_SKIP_WEBHOOK_DEREGISTRATION_ON_SHUTDOWN=true
       # Esta línea es la clave: desactiva el bloqueo estricto
@@ -32,7 +34,7 @@ services:
       - NODE_FUNCTION_ALLOW_EXTERNAL=buffer
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./monitor_status.txt:/home/node/.n8n-files/monitor_status.txt
+      - ./monitor_states.json:/home/node/.n8n-files/monitor_states.json
     networks:
       - uptime-ai
     # Esto le dice a n8n: "No arranques hasta que el reparador termine con éxito"
@@ -40,25 +42,29 @@ services:
       fix-permissions:
         condition: service_completed_successfully
 
-  # --- SERVICIO MONITOR ---
+  # ═══════════════════════════════════════════════════════════════
+  # MONITOR MULTI-SERVICIO
+  # Un solo contenedor que monitorea todos los servicios definidos
+  # en config/services.json
+  # ═══════════════════════════════════════════════════════════════
   monitor:
     image: alpine:latest
-    container_name: uptime-monitor-script
+    container_name: uptime-monitor
     restart: unless-stopped
     depends_on:
       - n8n
     networks:
       - uptime-ai
     environment:
-      - TARGET=https://guiders.es/docs
       - WEBHOOK_URL=http://n8n:5678/webhook/monitor-alert
+      - CHECK_INTERVAL=60
     volumes:
-      - ./cron/monitor.sh:/etc/monitor.sh
+      - ./cron/monitor-multi.sh:/etc/monitor.sh
+      - ./config/services.json:/etc/services.json:ro
     entrypoint: >
-      sh -c "apk add --no-cache curl ca-certificates && 
+      sh -c "apk add --no-cache curl jq ca-certificates &&
              chmod +x /etc/monitor.sh &&
-             echo '* * * * * sh /etc/monitor.sh' > /etc/crontabs/root && 
-             crond -f -l 8"
+             sh /etc/monitor.sh"
 
 volumes:
   n8n_data:

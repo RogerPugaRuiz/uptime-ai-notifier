@@ -1,0 +1,32 @@
+{
+  "Web Principal": {
+    "current": "000",
+    "previous": "000",
+    "last_change": "2026-02-02T11:17:06+00:00",
+    "history": []
+  },
+  "GitHub Status": {
+    "current": "200",
+    "previous": "200",
+    "last_change": "2026-02-02T11:17:07+00:00",
+    "history": []
+  },
+  "Servicio Inestable (Demo)": {
+    "current": "000",
+    "previous": "000",
+    "last_change": "2026-02-02T11:17:08+00:00",
+    "history": []
+  },
+  "API Backend": {
+    "current": "200",
+    "previous": "200",
+    "last_change": "2026-02-02T11:30:51+00:00",
+    "history": [
+      {
+        "from": "500",
+        "to": "200",
+        "timestamp": "2026-02-02T11:30:51+00:00"
+      }
+    ]
+  }
+}

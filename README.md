@@ -1,6 +1,6 @@
 # uptime-ai-notifier
 
-Sistema de monitoreo de disponibilidad (uptime) zero-cost y zero-infra. Utiliza GitHub Actions como vigilante remoto y n8n como motor de automatización e inteligencia artificial.
+Sistema de monitoreo de disponibilidad (uptime) **multi-servicio** zero-cost y zero-infra. Utiliza GitHub Actions como vigilante remoto y n8n como motor de automatización e inteligencia artificial.
 
 ## 🎯 ¿Qué hace este proyecto?
 
@@ -66,17 +66,23 @@ uptime-ai-notifier/
 │   │   └── 📄 uptime-monitor.yml    # [OPCIÓN A] GitHub Action para monitoreo
 │   └── 📄 copilot-instructions.md   # Instrucciones para GitHub Copilot
 │
+├── 📂 config/
+│   └── 📄 services.json             # Configuración de servicios a monitorear
+│
 ├── 📂 cron/
-│   └── 📄 monitor.sh                # [OPCIÓN B] Script de monitoreo local
+│   ├── 📄 monitor.sh                # [OPCIÓN B] Script de monitoreo local (single)
+│   └── 📄 monitor-multi.sh          # Script multi-servicio (lee services.json)
 │
 ├── 📂 workflows/
 │   ├── 📄 README.md                 # Documentación de workflows n8n
-│   ├── 📄 v1.0.0.json               # Workflow n8n v1.0.0 (básico)
-│   └── 📄 v2.0.0.json               # Workflow n8n v2.0.0 (con IA - Gemini)
+│   ├── 📄 v1.0.0.json               # Workflow n8n v1.0.0 (básico, single-site)
+│   ├── 📄 v2.0.0.json               # Workflow n8n v2.0.0 (con IA - Gemini)
+│   └── 📄 v3.0.0.json               # Workflow n8n v3.0.0 (multi-servicio)
 │
 ├── 📄 docker-compose.yml            # Configuración Docker principal
 ├── 📄 .env.example                  # Ejemplo de variables de entorno
 ├── 📄 monitor_status.txt            # Estado del último chequeo (autogenerado)
+├── 📄 monitor_states.json           # Estados de todos los servicios (multi-servicio)
 ├── 📄 LICENSE
 └── 📄 README.md
 ```
@@ -98,19 +104,39 @@ n8n es el cerebro del sistema. Recibe las alertas via webhook y puede:
 **Puerto:** `5678`
 **Acceso:** http://localhost:5678
 
-### 2️⃣ Monitor Local (Cron + Alpine)
+### 2️⃣ Monitor Local Multi-Servicio (Alpine)
 
 **Archivos:** 
 - `docker-compose.yml` → servicio `monitor`
-- `cron/monitor.sh`
+- `cron/monitor-multi.sh` → Script de monitoreo
+- `config/services.json` → Configuración de servicios
 
-Contenedor ligero Alpine Linux que ejecuta un script de monitoreo cada minuto usando cron.
+Contenedor ligero Alpine Linux que monitorea **múltiples servicios** definidos en un archivo JSON.
 
 **Características:**
-- Frecuencia: Cada minuto (configurable)
-- Timeout: 30 segundos
+- Frecuencia: Configurable por servicio (campo `interval`)
+- Timeout: 30 segundos por servicio
 - Reintentos: 2 automáticos
-- Envía SIEMPRE al webhook (para logging)
+- Envía webhook individual por cada servicio
+- Persistencia de estados en `monitor_states.json`
+
+**Configuración de servicios (`config/services.json`):**
+```json
+{
+  "services": [
+    {
+      "name": "Mi Sitio Web",
+      "url": "https://example.com",
+      "interval": 60
+    },
+    {
+      "name": "API Backend",
+      "url": "https://api.example.com/health",
+      "interval": 30
+    }
+  ]
+}
+```
 
 ### 3️⃣ GitHub Actions Monitor
 
@@ -308,14 +334,33 @@ cp .env.example .env
 | `TIMEZONE` | Zona horaria | `Europe/Madrid` |
 | `LOG_LEVEL` | Nivel de log (debug/info/warn/error) | `info` |
 
-### Configuración del Monitor Local
+### Concurrencia y Race Conditions
+
+Para evitar problemas de concurrencia cuando múltiples webhooks llegan simultáneamente, n8n está configurado con:
+
+```yaml
+environment:
+  - EXECUTIONS_CONCURRENCY=1  # Procesa un webhook a la vez
+```
+
+Esto garantiza que el archivo `monitor_states.json` no sufra condiciones de carrera cuando varios servicios envían alertas al mismo tiempo.
+
+### Configuración del Monitor Multi-Servicio
 
 En `docker-compose.yml`, servicio `monitor`:
 
 | Variable | Descripción | Valor actual |
 |----------|-------------|--------------|
-| `TARGET` | URL a monitorear | `https://guiders.es/docs` |
 | `WEBHOOK_URL` | Webhook de n8n | `http://n8n:5678/webhook/monitor-alert` |
+| `CHECK_INTERVAL` | Intervalo base en segundos | `60` |
+
+Los servicios se configuran en `config/services.json`:
+
+| Campo | Descripción | Ejemplo |
+|-------|-------------|---------|
+| `name` | Nombre identificador del servicio | `"GitHub Status"` |
+| `url` | URL a monitorear | `"https://www.githubstatus.com"` |
+| `interval` | Intervalo de chequeo (segundos) | `60` |
 
 ### Configuración de GitHub Actions
 

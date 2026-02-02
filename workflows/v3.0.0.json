@@ -1,0 +1,253 @@
+{
+  "name": "Uptime Monitor - Multi Service (v3)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "monitor-alert",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1040,
+        -48
+      ],
+      "id": "b0985a36-b2fb-4178-87d2-66954db44b60",
+      "name": "Webhook",
+      "webhookId": "33672ff0-e214-4d9f-87e7-bbdf7b76cca2"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/home/node/.n8n-files/monitor_states.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        -832,
+        -48
+      ],
+      "id": "71775d5d-b702-43e7-b0bd-a2a8dda619f0",
+      "name": "Read States JSON",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. OBTENER DATOS DEL WEBHOOK\nconst webhookData = $('Webhook').first().json.body;\n\n// Usar service si existe, sino usar site como nombre\nconst serviceName = webhookData.service || webhookData.site || 'Servicio Desconocido';\nconst newStatus = String(webhookData.error_code).trim();\nconst site = webhookData.site;\nconst timestamp = webhookData.timestamp || new Date().toISOString();\n\n// 2. LEER ESTADOS ANTERIORES DEL JSON\nlet allStates = {};\nlet oldStatus = 'Primer chequeo';\n\nconst binaryData = $input.first().binary;\nif (binaryData && binaryData.data) {\n  try {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    const jsonContent = buffer.toString('utf8').trim();\n    if (jsonContent && jsonContent !== '{}') {\n      allStates = JSON.parse(jsonContent);\n    }\n    if (allStates[serviceName]) {\n      oldStatus = allStates[serviceName].current || 'Primer chequeo';\n    }\n  } catch (error) {\n    console.log('Error leyendo JSON:', error);\n  }\n}\n\n// 3. DETECTAR SI HAY CAMBIO\nconst hasChanged = (newStatus !== oldStatus);\nconst isUp = (newStatus === '200' || newStatus === '302');\n\n// 4. ACTUALIZAR ESTADO DEL SERVICIO\nif (!allStates[serviceName]) {\n  allStates[serviceName] = {\n    current: newStatus,\n    previous: null,\n    last_change: timestamp,\n    history: []\n  };\n} else {\n  if (hasChanged) {\n    allStates[serviceName].history.push({\n      from: oldStatus,\n      to: newStatus,\n      timestamp: timestamp\n    });\n    if (allStates[serviceName].history.length > 50) {\n      allStates[serviceName].history.shift();\n    }\n    allStates[serviceName].last_change = timestamp;\n  }\n  allStates[serviceName].previous = oldStatus;\n  allStates[serviceName].current = newStatus;\n}\n\nlet displayStatus = newStatus;\nif (newStatus === '000') displayStatus = '000 (Sin Conexión)';\n\nreturn {\n  json: {\n    alert: hasChanged,\n    service: serviceName,\n    site: site,\n    new_status: displayStatus,\n    old_status: oldStatus,\n    type: isUp ? 'recovered' : 'down',\n    timestamp: timestamp,\n    all_states: allStates,\n    json_to_save: JSON.stringify(allStates, null, 2)\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        -48
+      ],
+      "id": "85c27e9a-1f01-4edc-bf5b-f1719e6c6d12",
+      "name": "Process Status Change"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9350a1ce-3382-4a58-b138-ef25d26a51a3",
+              "leftValue": "={{ $json.alert }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -384,
+        -48
+      ],
+      "id": "b514aa2b-d9eb-4eb8-888c-3c043b1e4da4",
+      "name": "If Status Changed"
+    },
+    {
+      "parameters": {
+        "chatId": "794033826",
+        "text": "={{ $json.type == 'recovered' ? '🟢 ¡SERVICIO RECUPERADO!' : '🚨 ¡ALERTA: SITIO CAÍDO!' }}\n\n🔧 **Servicio:** {{ $json.service }}\n🌐 **URL:** {{ $json.site }}\n📊 **Estado Actual:** {{ $json.new_status }}\n📋 **Estado Anterior:** {{ $json.old_status }}\n📅 **Hora:** {{ $json.timestamp }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -144,
+        -80
+      ],
+      "id": "3a21a67a-8163-4a63-ab22-4a7fb75ab89a",
+      "name": "Send Alert to Telegram",
+      "webhookId": "9bfc3a12-c9c9-41cb-9097-c43955bfe556",
+      "credentials": {
+        "telegramApi": {
+          "id": "tRTuS5eoxHHnazhE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "data",
+        "options": {
+          "fileName": "monitor_states.json"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        -432,
+        160
+      ],
+      "id": "3339acbb-e94d-4835-8281-85c3eed96870",
+      "name": "Convert States to JSON File"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/home/node/.n8n-files/monitor_states.json",
+        "options": {
+          "append": false
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        160
+      ],
+      "id": "0b8167f8-400c-4d9a-9e6e-2de43f3ac581",
+      "name": "Save States JSON",
+      "executeOnce": false,
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "json-states",
+              "name": "=data",
+              "value": "={{ JSON.stringify($json.all_states, null, 2) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -608,
+        160
+      ],
+      "id": "b7725116-286a-432f-9d71-74c71bde84ec",
+      "name": "Prepare JSON for Save"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read States JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read States JSON": {
+      "main": [
+        [
+          {
+            "node": "Process Status Change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Status Change": {
+      "main": [
+        [
+          {
+            "node": "If Status Changed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare JSON for Save",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Status Changed": {
+      "main": [
+        [
+          {
+            "node": "Send Alert to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare JSON for Save": {
+      "main": [
+        [
+          {
+            "node": "Convert States to JSON File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert States to JSON File": {
+      "main": [
+        [
+          {
+            "node": "Save States JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "9005d2de-4b3c-436b-8bc3-973a6f59b52d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c97c2a5ccd02d26b997ace6bafa1a406a7ec71dee822217d9948705c134b05af"
+  },
+  "id": "AjBDxecKidHHOm2c6NYg9",
+  "tags": []
+}
