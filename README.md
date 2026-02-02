@@ -121,8 +121,9 @@ Monitoreo externo que corre en la infraestructura de GitHub (gratis hasta 2000 m
 **Características:**
 - Frecuencia: Cada 15 minutos (configurable)
 - Ejecución manual disponible
-- Reintentos: 3 con 2 segundos entre cada uno
-- Solo envía al webhook cuando detecta problemas (HTTP != 200 o 302)
+- Timeout: 30 segundos
+- Reintentos: 2 automáticos
+- Envía SIEMPRE al webhook (para logging completo)
 
 ### 4️⃣ Fix-Permissions (Helper)
 
