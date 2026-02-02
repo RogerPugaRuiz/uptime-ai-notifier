@@ -62,14 +62,17 @@ Este proyecto ofrece **dos métodos de monitoreo** que pueden usarse de forma in
 ```
 uptime-ai-notifier/
 ├── 📂 .github/
-│   └── 📂 workflows/
-│       └── 📄 uptime-monitor.yml    # [OPCIÓN A] GitHub Action para monitoreo
+│   ├── 📂 workflows/
+│   │   └── 📄 uptime-monitor.yml    # [OPCIÓN A] GitHub Action para monitoreo
+│   └── 📄 copilot-instructions.md   # Instrucciones para GitHub Copilot
 │
 ├── 📂 cron/
 │   └── 📄 monitor.sh                # [OPCIÓN B] Script de monitoreo local
 │
 ├── 📂 workflows/
-│   └── 📄 README.md                 # Documentación de workflows n8n
+│   ├── 📄 README.md                 # Documentación de workflows n8n
+│   ├── 📄 v1.0.0.json               # Workflow n8n v1.0.0 (básico)
+│   └── 📄 v2.0.0.json               # Workflow n8n v2.0.0 (con IA - Gemini)
 │
 ├── 📄 docker-compose.yml            # Configuración Docker principal
 ├── 📄 .env.example                  # Ejemplo de variables de entorno
