@@ -1,0 +1,248 @@
+{
+  "name": "Uptime Monitor - Unified States (v3.2)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "monitor-alert",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1040,
+        -48
+      ],
+      "id": "b0985a36-b2fb-4178-87d2-66954db44b60",
+      "name": "Webhook",
+      "webhookId": "33672ff0-e214-4d9f-87e7-bbdf7b76cca2"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/home/node/.n8n-files/monitor_states.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        -832,
+        -48
+      ],
+      "id": "71775d5d-b702-43e7-b0bd-a2a8dda619f0",
+      "name": "Read States JSON",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════════════\n// WORKFLOW UNIFICADO v3.2 - Estados Unificados (Estilo StatusGator)\n// ═══════════════════════════════════════════════════════════════\n// Estados unificados: operational, minor, major, critical, maintenance\n// Estos estados se usan tanto para servicios propios como StatusGator\n// ═══════════════════════════════════════════════════════════════\n\nconst webhookData = $('Webhook').first().json.body;\n\n// ─────────────────────────────────────────────────────────────────\n// CONFIGURACIÓN DE ESTADOS UNIFICADOS\n// ─────────────────────────────────────────────────────────────────\nconst UNIFIED_STATES = {\n  operational: { type: 'up', label: 'Operacional', emoji: '🟢' },\n  minor: { type: 'degraded', label: 'Incidencia Menor', emoji: '🟡' },\n  major: { type: 'down', label: 'Incidencia Mayor', emoji: '🟠' },\n  critical: { type: 'down', label: 'Crítico', emoji: '🔴' },\n  maintenance: { type: 'maintenance', label: 'Mantenimiento', emoji: '🔵' }\n};\n\n// ─────────────────────────────────────────────────────────────────\n// 1. DETECTAR ORIGEN Y NORMALIZAR\n// ─────────────────────────────────────────────────────────────────\nlet normalized = {};\n\nconst isStatusGator = webhookData.service && typeof webhookData.service === 'object';\n\nif (isStatusGator) {\n  // ═══ STATUSGATOR ═══\n  const svc = webhookData.service || {};\n  const incident = webhookData.incident || {};\n  \n  // StatusGator ya usa: operational, minor, major, critical, maintenance\n  const gatorStatus = (svc.current_status || 'operational').toLowerCase();\n  const state = UNIFIED_STATES[gatorStatus] || UNIFIED_STATES['operational'];\n  \n  normalized = {\n    source: 'statusgator',\n    service_name: `[SG] ${svc.name || 'Servicio Desconocido'}`,\n    service_name_raw: svc.name || 'Servicio Desconocido',\n    status: gatorStatus,\n    status_type: state.type,\n    status_label: state.label,\n    status_emoji: state.emoji,\n    url: svc.url || incident.url || '',\n    timestamp: webhookData.timestamp || new Date().toISOString(),\n    incident_title: incident.title || null,\n    incident_status: incident.status || null,\n    incident_url: incident.url || null,\n    raw_code: svc.current_status || 'operational'\n  };\n} else {\n  // ═══ MONITOR PROPIO ═══\n  const serviceName = webhookData.service || webhookData.site || 'Servicio Desconocido';\n  const errorCode = String(webhookData.error_code || '000').trim();\n  \n  // Mapear códigos HTTP a estados unificados (estilo StatusGator)\n  let unifiedStatus = 'critical';\n  \n  if (errorCode === '200' || errorCode === '302' || errorCode === '301' || errorCode === '204' || errorCode === '304') {\n    unifiedStatus = 'operational';\n  } else if (errorCode === '000') {\n    unifiedStatus = 'critical'; // Sin conexión\n  } else if (errorCode.startsWith('5')) {\n    if (errorCode === '503' || errorCode === '502') {\n      unifiedStatus = 'major'; // Servicio no disponible\n    } else {\n      unifiedStatus = 'critical'; // Otros errores 5xx\n    }\n  } else if (errorCode.startsWith('4')) {\n    if (errorCode === '408' || errorCode === '429') {\n      unifiedStatus = 'minor'; // Timeout o rate limit\n    } else {\n      unifiedStatus = 'minor'; // Otros errores 4xx\n    }\n  }\n  \n  const state = UNIFIED_STATES[unifiedStatus];\n  \n  normalized = {\n    source: 'internal',\n    service_name: serviceName,\n    service_name_raw: serviceName,\n    status: unifiedStatus,\n    status_type: state.type,\n    status_label: state.label,\n    status_emoji: state.emoji,\n    url: webhookData.site || '',\n    timestamp: webhookData.timestamp || new Date().toISOString(),\n    incident_title: null,\n    incident_status: null,\n    incident_url: null,\n    raw_code: errorCode\n  };\n}\n\n// ─────────────────────────────────────────────────────────────────\n// 2. LEER ESTADOS ANTERIORES\n// ─────────────────────────────────────────────────────────────────\nlet allStates = {};\nlet oldStatus = 'first_check';\nlet oldType = null;\n\nconst binaryData = $input.first().binary;\nif (binaryData && binaryData.data) {\n  try {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    const jsonContent = buffer.toString('utf8').trim();\n    if (jsonContent && jsonContent !== '{}') {\n      allStates = JSON.parse(jsonContent);\n    }\n    if (allStates[normalized.service_name]) {\n      oldStatus = allStates[normalized.service_name].current || 'first_check';\n      oldType = allStates[normalized.service_name].current_type || null;\n    }\n  } catch (error) {\n    console.log('Error leyendo JSON:', error);\n  }\n}\n\n// ─────────────────────────────────────────────────────────────────\n// 3. DETECTAR CAMBIO\n// ─────────────────────────────────────────────────────────────────\nconst hasChanged = (normalized.status !== oldStatus);\nconst isRecovery = hasChanged && normalized.status === 'operational' && oldStatus !== 'operational';\nconst isDown = hasChanged && (normalized.status === 'major' || normalized.status === 'critical');\nconst isDegraded = hasChanged && normalized.status === 'minor';\nconst isMaintenance = hasChanged && normalized.status === 'maintenance';\n\n// StatusGator ya filtra - solo envía webhooks cuando hay incidentes\nconst shouldAlert = isStatusGator ? true : hasChanged;\n\n// ─────────────────────────────────────────────────────────────────\n// 4. ACTUALIZAR ESTADOS\n// ─────────────────────────────────────────────────────────────────\nif (!allStates[normalized.service_name]) {\n  allStates[normalized.service_name] = {\n    source: normalized.source,\n    current: normalized.status,\n    current_type: normalized.status_type,\n    previous: null,\n    previous_type: null,\n    last_change: normalized.timestamp,\n    history: []\n  };\n} else {\n  if (hasChanged) {\n    allStates[normalized.service_name].history.push({\n      from: oldStatus,\n      from_type: oldType,\n      to: normalized.status,\n      to_type: normalized.status_type,\n      timestamp: normalized.timestamp\n    });\n    if (allStates[normalized.service_name].history.length > 50) {\n      allStates[normalized.service_name].history.shift();\n    }\n    allStates[normalized.service_name].last_change = normalized.timestamp;\n  }\n  allStates[normalized.service_name].previous = oldStatus;\n  allStates[normalized.service_name].previous_type = oldType;\n  allStates[normalized.service_name].current = normalized.status;\n  allStates[normalized.service_name].current_type = normalized.status_type;\n  allStates[normalized.service_name].source = normalized.source;\n}\n\n// ─────────────────────────────────────────────────────────────────\n// 5. RETORNAR DATOS NORMALIZADOS\n// ─────────────────────────────────────────────────────────────────\nreturn {\n  json: {\n    // Control de flujo\n    alert: shouldAlert,\n    \n    // Datos normalizados\n    source: normalized.source,\n    service: normalized.service_name,\n    service_raw: normalized.service_name_raw,\n    url: normalized.url,\n    \n    // Estados unificados\n    status: normalized.status,\n    status_label: normalized.status_label,\n    status_emoji: normalized.status_emoji,\n    status_type: normalized.status_type,\n    raw_code: normalized.raw_code,\n    \n    old_status: oldStatus,\n    old_status_label: UNIFIED_STATES[oldStatus]?.label || 'Primer Chequeo',\n    old_status_type: oldType,\n    \n    // Clasificación\n    is_recovery: isRecovery,\n    is_down: isDown,\n    is_degraded: isDegraded,\n    is_maintenance: isMaintenance,\n    \n    // Incidente (solo StatusGator)\n    incident_title: normalized.incident_title,\n    incident_status: normalized.incident_status,\n    incident_url: normalized.incident_url,\n    \n    // Metadata\n    timestamp: normalized.timestamp,\n    all_states: allStates,\n    json_to_save: JSON.stringify(allStates, null, 2)\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        -48
+      ],
+      "id": "85c27e9a-1f01-4edc-bf5b-f1719e6c6d12",
+      "name": "Normalize & Process"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9350a1ce-3382-4a58-b138-ef25d26a51a3",
+              "leftValue": "={{ $json.alert }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -384,
+        -48
+      ],
+      "id": "b514aa2b-d9eb-4eb8-888c-3c043b1e4da4",
+      "name": "If Status Changed"
+    },
+    {
+      "parameters": {
+        "chatId": "794033826",
+        "text": "={{ $json.status_emoji }} {{ $json.is_recovery ? '¡SERVICIO RECUPERADO!' : $json.is_down ? '¡ALERTA: SERVICIO CAÍDO!' : $json.is_degraded ? '¡ALERTA: SERVICIO DEGRADADO!' : $json.is_maintenance ? '¡MANTENIMIENTO PROGRAMADO!' : '¡CAMBIO DE ESTADO!' }}\n\n{{ $json.source === 'statusgator' ? '🌐' : '🏠' }} **Origen:** {{ $json.source === 'statusgator' ? 'StatusGator (Tercero)' : 'Monitor Interno' }}\n🔧 **Servicio:** {{ $json.service_raw }}\n{{ $json.url ? '🔗 **URL:** ' + $json.url : '' }}\n📊 **Estado:** {{ $json.status_emoji }} {{ $json.status_label }} (`{{ $json.status }}`)\n📋 **Anterior:** {{ $json.old_status_label }} (`{{ $json.old_status }}`)\n{{ $json.raw_code !== $json.status ? '🔢 **Código HTTP:** ' + $json.raw_code : '' }}\n{{ $json.incident_title ? '📝 **Incidente:** ' + $json.incident_title : '' }}\n{{ $json.incident_status ? '📌 **Estado Incidente:** ' + $json.incident_status : '' }}\n{{ $json.incident_url ? '🔗 **Detalles:** ' + $json.incident_url : '' }}\n📅 **Hora:** {{ $json.timestamp }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -144,
+        -80
+      ],
+      "id": "3a21a67a-8163-4a63-ab22-4a7fb75ab89a",
+      "name": "Send Alert to Telegram",
+      "webhookId": "9bfc3a12-c9c9-41cb-9097-c43955bfe556",
+      "credentials": {
+        "telegramApi": {
+          "id": "tRTuS5eoxHHnazhE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "data",
+        "options": {
+          "fileName": "monitor_states.json"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        -432,
+        160
+      ],
+      "id": "3339acbb-e94d-4835-8281-85c3eed96870",
+      "name": "Convert States to JSON File"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/home/node/.n8n-files/monitor_states.json",
+        "options": {
+          "append": false
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        160
+      ],
+      "id": "0b8167f8-400c-4d9a-9e6e-2de43f3ac581",
+      "name": "Save States JSON",
+      "executeOnce": false,
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "json-states",
+              "name": "=data",
+              "value": "={{ JSON.stringify($json.all_states, null, 2) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -608,
+        160
+      ],
+      "id": "b7725116-286a-432f-9d71-74c71bde84ec",
+      "name": "Prepare JSON for Save"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read States JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read States JSON": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Process": {
+      "main": [
+        [
+          {
+            "node": "If Status Changed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare JSON for Save",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Status Changed": {
+      "main": [
+        [
+          {
+            "node": "Send Alert to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare JSON for Save": {
+      "main": [
+        [
+          {
+            "node": "Convert States to JSON File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert States to JSON File": {
+      "main": [
+        [
+          {
+            "node": "Save States JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "local"
+  },
+  "tags": []
+}

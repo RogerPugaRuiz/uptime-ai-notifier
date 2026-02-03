@@ -1,32 +1,104 @@
 {
   "Web Principal": {
-    "current": "000",
-    "previous": "000",
-    "last_change": "2026-02-02T11:17:06+00:00",
-    "history": []
-  },
-  "GitHub Status": {
-    "current": "200",
-    "previous": "200",
-    "last_change": "2026-02-02T11:17:07+00:00",
-    "history": []
-  },
-  "Servicio Inestable (Demo)": {
-    "current": "000",
-    "previous": "000",
-    "last_change": "2026-02-02T11:17:08+00:00",
-    "history": []
-  },
-  "API Backend": {
-    "current": "200",
-    "previous": "200",
-    "last_change": "2026-02-02T11:30:51+00:00",
+    "source": "internal",
+    "current": "down",
+    "current_type": "down",
+    "previous": "down",
+    "previous_type": "down",
+    "last_change": "2026-02-03T08:42:11+00:00",
     "history": [
       {
-        "from": "500",
-        "to": "200",
-        "timestamp": "2026-02-02T11:30:51+00:00"
+        "from": "critical",
+        "to": "down",
+        "timestamp": "2026-02-03T08:42:11+00:00"
       }
     ]
+  },
+  "GitHub Status": {
+    "source": "internal",
+    "current": "up",
+    "current_type": "up",
+    "previous": "up",
+    "previous_type": "up",
+    "last_change": "2026-02-03T08:41:08+00:00",
+    "history": [
+      {
+        "from": "operational",
+        "to": "up",
+        "timestamp": "2026-02-03T08:41:08+00:00"
+      }
+    ]
+  },
+  "Servicio Inestable (Demo)": {
+    "source": "internal",
+    "current": "down",
+    "current_type": "down",
+    "previous": "down",
+    "previous_type": "down",
+    "last_change": "2026-02-03T08:41:09+00:00",
+    "history": [
+      {
+        "from": "critical",
+        "to": "down",
+        "timestamp": "2026-02-03T08:41:09+00:00"
+      }
+    ]
+  },
+  "API Backend": {
+    "source": "internal",
+    "current": "up",
+    "current_type": "up",
+    "previous": "up",
+    "previous_type": "up",
+    "last_change": "2026-02-03T08:41:07+00:00",
+    "history": [
+      {
+        "from": "operational",
+        "to": "up",
+        "timestamp": "2026-02-03T08:41:07+00:00"
+      }
+    ]
+  },
+  "[SG] Amazon Web Services": {
+    "source": "statusgator",
+    "current": "up",
+    "current_type": "up",
+    "previous": "down",
+    "previous_type": "up",
+    "last_change": "2026-02-03T08:53:59Z",
+    "history": [
+      {
+        "from": "up",
+        "to": "down",
+        "timestamp": "2026-02-03T08:42:33Z"
+      },
+      {
+        "from": "up",
+        "to": "down",
+        "timestamp": "2026-02-03T08:42:54Z"
+      },
+      {
+        "from": "up",
+        "to": "maintenance",
+        "timestamp": "2026-02-03T08:43:27Z"
+      },
+      {
+        "from": "up",
+        "to": "down",
+        "timestamp": "2026-02-03T08:53:43Z"
+      },
+      {
+        "from": "down",
+        "to": "up",
+        "timestamp": "2026-02-03T08:53:59Z"
+      }
+    ]
+  },
+  "https://google.com": {
+    "source": "internal",
+    "current": "warn",
+    "previous": null,
+    "last_change": "2026-02-03T08:40:46.587Z",
+    "history": []
   }
 }

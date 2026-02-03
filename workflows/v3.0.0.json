@@ -2,6 +2,17 @@
   "name": "Uptime Monitor - Multi Service (v3)",
   "nodes": [
     {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        16,
+        368
+      ],
+      "id": "b3052d77-41b3-4966-8c76-6991ded70923",
+      "name": "No Change"
+    },
+    {
       "parameters": {
         "httpMethod": "POST",
         "path": "monitor-alert",
@@ -10,10 +21,10 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -1040,
-        -48
+        -880,
+        336
       ],
-      "id": "b0985a36-b2fb-4178-87d2-66954db44b60",
+      "id": "3ce1ac31-23ea-4504-acc8-156cdd9187d6",
       "name": "Webhook",
       "webhookId": "33672ff0-e214-4d9f-87e7-bbdf7b76cca2"
     },
@@ -25,10 +36,10 @@
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1.1,
       "position": [
-        -832,
-        -48
+        -672,
+        336
       ],
-      "id": "71775d5d-b702-43e7-b0bd-a2a8dda619f0",
+      "id": "1fc4b9af-23c0-49c1-8caf-bdda6442be42",
       "name": "Read States JSON",
       "onError": "continueRegularOutput"
     },
@@ -39,10 +50,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -608,
-        -48
+        -448,
+        336
       ],
-      "id": "85c27e9a-1f01-4edc-bf5b-f1719e6c6d12",
+      "id": "d2bd5243-13c7-475c-9db2-4e363fdd4069",
       "name": "Process Status Change"
     },
     {
@@ -73,10 +84,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -384,
-        -48
+        -224,
+        336
       ],
-      "id": "b514aa2b-d9eb-4eb8-888c-3c043b1e4da4",
+      "id": "10f52d6d-9834-4eb6-8a68-120c5841d22a",
       "name": "If Status Changed"
     },
     {
@@ -88,10 +99,10 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -144,
-        -80
+        16,
+        176
       ],
-      "id": "3a21a67a-8163-4a63-ab22-4a7fb75ab89a",
+      "id": "1de1e8dd-497c-4ae6-b3c6-226237a690f3",
       "name": "Send Alert to Telegram",
       "webhookId": "9bfc3a12-c9c9-41cb-9097-c43955bfe556",
       "credentials": {
@@ -112,10 +123,10 @@
       "type": "n8n-nodes-base.convertToFile",
       "typeVersion": 1.1,
       "position": [
-        -432,
-        160
+        -272,
+        544
       ],
-      "id": "3339acbb-e94d-4835-8281-85c3eed96870",
+      "id": "5ea55742-d4b3-46a2-98bd-7d2b0d4bef85",
       "name": "Convert States to JSON File"
     },
     {
@@ -129,10 +140,10 @@
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1.1,
       "position": [
-        -240,
-        160
+        -80,
+        544
       ],
-      "id": "0b8167f8-400c-4d9a-9e6e-2de43f3ac581",
+      "id": "d9464f1f-97c0-467c-a91f-10be5b6c14e6",
       "name": "Save States JSON",
       "executeOnce": false,
       "retryOnFail": false,
@@ -155,10 +166,10 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -608,
-        160
+        -448,
+        544
       ],
-      "id": "b7725116-286a-432f-9d71-74c71bde84ec",
+      "id": "55134575-6462-4a5c-b41d-106e9f7c422c",
       "name": "Prepare JSON for Save"
     }
   ],
@@ -210,6 +221,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "No Change",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -243,7 +261,7 @@
     "timeSavedMode": "fixed",
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "9005d2de-4b3c-436b-8bc3-973a6f59b52d",
+  "versionId": "ff1dd1b3-aec1-492a-b0cd-90daec70e706",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "c97c2a5ccd02d26b997ace6bafa1a406a7ec71dee822217d9948705c134b05af"

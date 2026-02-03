@@ -2,82 +2,175 @@
 
 ## Arquitectura del Sistema
 
-Sistema de monitoreo zero-cost que combina:
-- **GitHub Actions** como vigilante remoto (ejecuta verificaciones cada 15 min)
-- **n8n** (containerizado) como motor de automatización e IA
-- **Comunicación**: GitHub Actions → n8n vía webhook POST
+Sistema de monitoreo multi-servicio zero-cost con DOS métodos independientes:
 
-Flujo de datos: GitHub Actions curl al sitio → si falla → POST a webhook n8n → n8n procesa y envía notificaciones
+### Método A: GitHub Actions (Zero-infra)
+- Ejecuta cada 15 minutos desde GitHub (2000 min/mes gratis)
+- Ver [.github/workflows/uptime-monitor.yml](.github/workflows/uptime-monitor.yml)
+- Envía siempre al webhook (incluso si servicio está up) para logging completo
 
-## Entornos
+### Método B: Docker Local (Self-hosted)
+- Monitor Alpine Linux con cron cada minuto configurable
+- Lee múltiples servicios desde [config/services.json](../config/services.json)
+- Script principal: [cron/monitor-multi.sh](../cron/monitor-multi.sh)
+- Cada servicio puede tener `interval` diferente
 
-Dos configuraciones Docker Compose separadas:
-- **Test** ([docker-compose.test.yml](docker-compose.test.yml)): logs debug, consola, 7 días de datos, puerto 5678
-- **Prod** ([docker-compose.prod.yml](docker-compose.prod.yml)): logs info, archivo, 14 días de datos, healthcheck, variables desde `.env`
+**Flujo común**: Monitor → curl al sitio → POST webhook n8n → n8n procesa con IA → notificaciones multicanal
 
-Comando específico: `docker-compose -f docker-compose.{test|prod}.yml {up|down|logs|restart}`
+## Estructura de Componentes
 
-## Variables de Entorno
+### 1. n8n (Motor de Automatización)
+- Corre en [docker-compose.yml](../docker-compose.yml), puerto 5678
+- Webhook endpoint: `http://localhost:5678/webhook/monitor-alert`
+- **CRÍTICO**: `EXECUTIONS_CONCURRENCY=1` para evitar race conditions en persistencia
+- Volumen persistente: `n8n_data` para workflows y credentials
+- Archivo compartido: `monitor_states.json` montado en `/home/node/.n8n-files/` (acceso filesystem desde workflows)
 
-Producción usa archivo `.env` (crear desde [.env.example](.env.example)):
-- `N8N_HOST`: host accesible (default: localhost)
-- `N8N_PROTOCOL`: http o https (requiere reverse proxy para https)
-- `WEBHOOK_URL`: URL completa del webhook n8n
-- `TIMEZONE`: zona horaria para logs/ejecuciones
+### 2. Monitor Multi-Servicio (Alpine)
+- Contenedor único que lee array JSON de servicios
+- Timeout: 30s por servicio, 2 reintentos automáticos
+- Envía JSON estructurado: `{"service": "nombre", "site": "url", "error_code": "200", "event": "health_check", "timestamp": "ISO8601"}`
+- **No** mantiene estado internamente - usa archivo externo si es necesario
 
-## GitHub Actions Configuration
+### 3. Fix-Permissions (Init Container)
+- Ejecuta una sola vez al inicio para arreglar permisos volúmenes n8n
+- Se debe completar exitosamente antes de iniciar n8n (`depends_on.condition: service_completed_successfully`)
+- Solución para problemas de permisos 1000:1000 en volumes
 
-[.github/workflows/uptime-monitor.yml](.github/workflows/uptime-monitor.yml) requiere secrets en GitHub:
-- `WEBHOOK_URL` (requerido): URL del webhook de n8n
-- `TARGET_URL` (opcional): sitio a monitorear (default: https://google.com)
+## Configuración de Servicios
 
-Payload enviado a n8n en falla:
+Editar [config/services.json](../config/services.json) para agregar/modificar servicios monitoreados:
+
 ```json
-{"site": "URL", "error_code": "HTTP_CODE", "event": "site_down"}
+{
+  "name": "Nombre del Servicio",
+  "url": "https://example.com/health",
+  "interval": 60
+}
 ```
 
-## Workflows n8n
+**Convención**: Usar URLs de health check dedicadas cuando sea posible, no páginas HTML completas.
 
-- Guardar en [workflows/](workflows/) para versionarlos
-- Montado read-only en contenedor: `./workflows:/home/node/.n8n/workflows:ro`
-- Formatos: JSON exportados desde n8n UI
+## Workflows n8n Versionados
 
-## Convenciones Específicas
+Guardar en [workflows/](../workflows/) para control de versiones:
+- **v1.0.0**: Alertas básicas single-site
+- **v2.0.0**: Con Google Gemini para mensajes inteligentes
+- **v3.0.0**: Multi-servicio con procesamiento avanzado
+- **v3.1.0**: Última versión estable
 
-- **Puertos fijos**: n8n siempre en 5678 (ambos entornos)
-- **Network isolation**: cada entorno usa su propia red Docker bridge
-- **Volumenes nombrados**: `n8n_test_data` y `n8n_prod_data` para persistencia
-- **Logs producción**: montados en `./logs` para acceso externo
-- **Healthcheck**: solo en prod, verifica endpoint raíz cada 30s
+**Importar/exportar**: n8n UI → Menu (⋯) → Import/Export → guardar con nombre vX.X.X.json
 
-## Debugging Workflows
+### Workflow Actual: v3.1.0 (Unified)
 
-Flujo de troubleshooting:
-1. Verificar logs: `docker-compose -f docker-compose.{env}.yml logs -f`
-2. Confirmar webhook accesible desde GitHub (usar curl manual)
-3. Revisar ejecuciones en n8n UI (http://localhost:5678)
-4. En test: nivel debug activo por defecto
+Workflow unificado que procesa alertas de **dos fuentes diferentes**:
+
+**Flujo de nodos**:
+```
+Webhook → Read States JSON → Normalize & Process → If Status Changed → Send Alert to Telegram
+                                      ↓
+                           Prepare JSON for Save → Convert to File → Save States JSON
+```
+
+**Fuentes soportadas**:
+| Fuente | Payload | Detección |
+|--------|---------|-----------|
+| **Monitor Interno** | `{service, site, error_code, timestamp}` | `service` es string |
+| **StatusGator** | `{service: {name, current_status}, incident: {...}}` | `service` es objeto |
+
+**Lógica de normalización** (nodo `Normalize & Process`):
+- StatusGator estados: `operational`, `minor`, `major`, `critical`, `maintenance`
+- Monitor interno: códigos HTTP (`200`, `4xx`, `5xx`, `000`)
+- Todos se mapean a tipos: `up`, `down`, `degraded`, `maintenance`
+
+**Detección de cambios**:
+- Compara `status_code` actual vs anterior en `monitor_states.json`
+- **StatusGator**: Siempre alerta (ya viene pre-filtrado)
+- **Monitor interno**: Solo alerta si hay cambio de estado
+
+**Clasificación de alertas**:
+- `is_recovery`: Transición a `up` desde otro estado
+- `is_down`: Transición a `down`
+- `is_degraded`: Transición a `degraded`
+- `is_maintenance`: Transición a `maintenance`
+
+**Historial**: Guarda últimos 50 cambios por servicio en `monitor_states.json`
+
+**Notificación**: Telegram con emojis según tipo (🟢 recovery, 🚨 down, 🟡 degraded, 🔧 maintenance)
+
+Configurar en [docker-compose.yml](../docker-compose.yml):
+- `WEBHOOK_URL`: Endpoint del webhook n8n (default: `http://n8n:5678/webhook/monitor-alert`)
+- `CHECK_INTERVAL`: Segundos entre chequeos del monitor Docker (default: 60)
+- `TIMEZONE`: Zona horaria (default: Europe/Madrid)
+- `EXECUTIONS_DATA_MAX_AGE`: Horas para mantener ejecuciones (default: 336 = 14 días)
+
+Para GitHub Actions, configurar secrets:
+- `WEBHOOK_URL` (requerido): URL pública del webhook n8n
+- `TARGET_URL` (opcional): Default es https://google.com
 
 ## Comandos de Desarrollo
 
-No usar `docker` directamente - siempre especificar archivo compose:
+**Inicio del stack completo**:
 ```bash
-# Iniciar
-docker-compose -f docker-compose.test.yml up -d
-
-# Ver logs en tiempo real
-docker-compose -f docker-compose.test.yml logs -f
-
-# Reiniciar tras cambios config
-docker-compose -f docker-compose.test.yml restart
-
-# Limpiar todo (DESTRUYE DATOS)
-docker-compose -f docker-compose.test.yml down -v
+docker-compose up -d
 ```
 
-## Seguridad en Producción
+**Ver logs en tiempo real**:
+```bash
+docker-compose logs -f              # todos los servicios
+docker-compose logs -f n8n          # solo n8n
+docker-compose logs -f monitor      # solo monitor
+```
 
-- HTTPS requiere reverse proxy externo (Nginx/Traefik) - n8n no maneja SSL directamente
-- Autenticación n8n: configurar en UI primera ejecución
-- Credentials sensibles: solo en variables entorno, nunca en workflows versionados
-- Actualizar imagen: `docker-compose pull` antes de `up`
+**Reiniciar tras cambios en scripts**:
+```bash
+docker-compose restart monitor      # reinicia solo el monitor
+docker-compose restart              # reinicia todo
+```
+
+**Verificar estado**:
+```bash
+docker-compose ps
+```
+
+**Limpiar todo (DESTRUYE DATOS)**:
+```bash
+docker-compose down -v
+```
+
+## Debugging Workflows
+
+1. **Verificar webhook accesible**: 
+   ```bash
+   curl -X POST http://localhost:5678/webhook/monitor-alert \
+     -H "Content-Type: application/json" \
+     -d '{"service":"Test","site":"https://test.com","error_code":"200","event":"health_check","timestamp":"2026-02-03T10:00:00Z"}'
+   ```
+
+2. **Ver logs monitor**: `docker-compose logs -f monitor` - buscar líneas `[DEBUG] Enviando:`
+
+3. **Revisar ejecuciones en n8n**: http://localhost:5678 → Executions (panel izquierdo)
+
+4. **Verificar permisos volumen**: Si n8n no arranca, revisar logs de `fix-permissions`
+
+## Persistencia y Estados
+
+- `monitor_states.json`: Archivo autogenerado por workflows n8n para tracking de estados (up/down) entre ejecuciones
+- Montado en contenedor n8n: `/home/node/.n8n-files/monitor_states.json`
+- Estructura típica: `{"serviceName": {"status": "up|down", "lastCheck": "timestamp", "downSince": "timestamp"}}`
+- **Importante**: n8n necesita `N8N_BLOCK_FS_WRITE_ACCESS=false` para escribir en este archivo
+
+## Patrones y Decisiones de Arquitectura
+
+- **Un monitor, múltiples servicios**: Preferir agregar servicios en JSON sobre crear múltiples contenedores
+- **Enviar siempre**: Webhooks se envían en todos los casos (200, 4xx, 5xx) para logging centralizado en n8n
+- **Concurrencia=1**: Evita problemas de escritura concurrente en archivos JSON compartidos
+- **Init containers**: Patrón para setup de permisos antes del servicio principal
+- **Network bridge**: Red Docker interna `uptime-ai` para comunicación n8n ↔ monitor sin exponer puertos
+
+## Seguridad
+
+- n8n en localhost:5678 - **NO exponer sin autenticación**
+- Configurar credenciales en n8n UI al primer inicio
+- Para producción con webhook público: usar reverse proxy (Nginx/Traefik) con HTTPS
+- Nunca versionar credenciales de API en workflows JSON - usar sistema de credentials de n8n
